@@ -67,6 +67,7 @@ export async function finalizePayment(formData: FormData) {
       | Array<{
           product_id: string;
           quantity: number;
+          price: number;
           products?: { name: string; track_stock: boolean; stock_qty: number } | null;
         }>
       | null) ?? [];
