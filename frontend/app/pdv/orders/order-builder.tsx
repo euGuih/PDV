@@ -20,7 +20,7 @@ type TableSession = {
   table_id: string;
   opened_at: string;
   status: "OPEN" | "CLOSED";
-  tables?: { name: string } | null;
+  tables?: { name: string }[] | null;
 };
 
 type OrderItem = {
@@ -198,7 +198,7 @@ export default function OrderBuilder({
                 <option value="">Selecione a mesa</option>
                 {tableSessions.map((session) => (
                   <option key={session.id} value={session.id}>
-                    {session.tables?.name ?? "Mesa"} ·{" "}
+                    {session.tables?.[0]?.name ?? "Mesa"} ·{" "}
                     {new Date(session.opened_at).toLocaleTimeString()}
                   </option>
                 ))}
