@@ -9,7 +9,7 @@ export default async function ShiftsPage() {
 
   const userId = userData?.user?.id ?? null;
 
-  const { data: openShift } = await supabase
+  const { data: activeShift } = await supabase
     .from("shifts")
     .select("id, opened_at, note_open")
     .eq("status", "OPEN")
@@ -31,7 +31,7 @@ export default async function ShiftsPage() {
         </p>
       </div>
 
-      {!openShift ? (
+      {!activeShift ? (
         <form className="space-y-3 rounded border p-4" action={openShift}>
           <div className="space-y-1">
             <label className="text-sm font-medium">Observacoes de abertura</label>
@@ -50,12 +50,12 @@ export default async function ShiftsPage() {
           <p className="text-sm">
             Turno aberto em{" "}
             <span className="font-medium">
-              {new Date(openShift.opened_at).toLocaleString()}
+              {new Date(activeShift.opened_at).toLocaleString()}
             </span>
           </p>
-          {openShift.note_open && (
+          {activeShift.note_open && (
             <p className="text-xs text-neutral-500">
-              Nota: {openShift.note_open}
+              Nota: {activeShift.note_open}
             </p>
           )}
           <div className="space-y-1">
