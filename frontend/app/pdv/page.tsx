@@ -65,6 +65,24 @@ export default async function PdvPage() {
         </Link>
         <Link
           className="rounded border px-4 py-6 text-center"
+          href="/pdv/tables"
+        >
+          Mesas
+        </Link>
+        <Link
+          className="rounded border px-4 py-6 text-center"
+          href="/pdv/shifts"
+        >
+          Turnos
+        </Link>
+        <Link
+          className="rounded border px-4 py-6 text-center"
+          href="/pdv/orders/history"
+        >
+          Historico de pedidos
+        </Link>
+        <Link
+          className="rounded border px-4 py-6 text-center"
           href="/pdv/reports"
         >
           Relatórios

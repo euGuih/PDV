@@ -28,6 +28,12 @@ export default async function OrdersPage() {
     .eq("active", true)
     .order("name");
 
+  const { data: tableSessions } = await supabase
+    .from("table_sessions")
+    .select("id, table_id, opened_at, status, tables(name)")
+    .eq("status", "OPEN")
+    .order("opened_at");
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -39,6 +45,7 @@ export default async function OrdersPage() {
       <OrderBuilder
         categories={categories ?? []}
         products={products ?? []}
+        tableSessions={tableSessions ?? []}
       />
     </div>
   );

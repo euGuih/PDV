@@ -16,6 +16,9 @@ type Product = {
   description: string | null;
   category_id: string | null;
   categories?: { name: string }[] | null;
+  track_stock?: boolean;
+  stock_qty?: number;
+  min_stock?: number;
 };
 
 type ProductsManagerProps = {
@@ -50,6 +53,12 @@ export default function ProductsManager({
                 </p>
                 <p className="text-xs text-neutral-500">
                   Status: {product.active ? "Ativo" : "Inativo"}
+                </p>
+                <p className="text-xs text-neutral-500">
+                  Estoque:{" "}
+                  {product.track_stock
+                    ? `${product.stock_qty ?? 0} (min ${product.min_stock ?? 0})`
+                    : "Nao controlado"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -130,6 +139,37 @@ export default function ProductsManager({
                 name="description"
                 defaultValue={editing?.description ?? ""}
               />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Controle de estoque</label>
+              <div className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="trackStock"
+                  defaultChecked={editing?.track_stock ?? false}
+                />
+                <span>Controlar estoque</span>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Estoque atual</label>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  name="stockQty"
+                  defaultValue={editing?.stock_qty ?? 0}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Estoque mínimo</label>
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  name="minStock"
+                  defaultValue={editing?.min_stock ?? 0}
+                  placeholder="0"
+                />
+              </div>
             </div>
             <button className="w-full rounded bg-black px-4 py-2 text-white">
               {editing ? "Salvar alterações" : "Cadastrar produto"}

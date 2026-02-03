@@ -15,6 +15,27 @@ type OrderItemRow = {
   products?: { name: string } | null;
 };
 
+type StockRow = {
+  id: string;
+  name: string;
+  stock_qty: number;
+  min_stock: number;
+};
+
+type CashMovementRow = {
+  id: string;
+  amount: number;
+  type: "SUPPLY" | "WITHDRAW";
+  created_at: string;
+};
+
+type ShiftRow = {
+  id: string;
+  opened_at: string;
+  closed_at: string | null;
+  status: "OPEN" | "CLOSED";
+};
+
 export default async function ReportsPage() {
   const supabase = await createClient();
 
@@ -61,6 +82,33 @@ export default async function ReportsPage() {
     .order("opened_at", { ascending: false })
     .limit(10);
 
+  const { data: cashMovements } = await supabase
+    .from("cash_movements")
+    .select("id, amount, type, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const totalSupply =
+    (cashMovements as CashMovementRow[] | null)?.reduce(
+      (acc, item) => acc + (item.type === "SUPPLY" ? Number(item.amount) : 0),
+      0
+    ) ?? 0;
+  const totalWithdraw =
+    (cashMovements as CashMovementRow[] | null)?.reduce(
+      (acc, item) => acc + (item.type === "WITHDRAW" ? Number(item.amount) : 0),
+      0
+    ) ?? 0;
+
+  const { data: shifts } = await supabase
+    .from("shifts")
+    .select("id, opened_at, closed_at, status")
+    .order("opened_at", { ascending: false })
+    .limit(10);
+
+  const openShiftsCount =
+    (shifts as ShiftRow[] | null)?.filter((shift) => shift.status === "OPEN")
+      .length ?? 0;
+
   const paymentsByRegister = (payments as PaymentRow[] | null)?.reduce(
     (acc, item) => {
       const registerId = item.orders?.cash_register_id;
@@ -70,6 +118,12 @@ export default async function ReportsPage() {
     },
     {} as Record<string, number>
   );
+
+  const { data: lowStock } = await supabase
+    .from("products")
+    .select("id, name, stock_qty, min_stock")
+    .eq("track_stock", true)
+    .order("stock_qty");
 
   return (
     <div className="p-6 space-y-8">
@@ -88,6 +142,10 @@ export default async function ReportsPage() {
         <div className="rounded border p-4">
           <p className="text-sm text-neutral-500">Pedidos pagos</p>
           <p className="text-xl font-semibold">{paidOrdersCount ?? 0}</p>
+        </div>
+        <div className="rounded border p-4">
+          <p className="text-sm text-neutral-500">Turnos abertos</p>
+          <p className="text-xl font-semibold">{openShiftsCount}</p>
         </div>
       </div>
 
@@ -138,6 +196,27 @@ export default async function ReportsPage() {
       </div>
 
       <div className="rounded border p-4">
+        <h2 className="text-base font-semibold mb-3">Alertas de estoque</h2>
+        <div className="space-y-2 text-sm">
+          {(lowStock as StockRow[] | null)?.length ? (
+            (lowStock as StockRow[])
+              .filter((item) => Number(item.stock_qty) <= Number(item.min_stock))
+              .slice(0, 8)
+              .map((item) => (
+                <div key={item.id} className="flex justify-between">
+                  <span>{item.name}</span>
+                  <span>
+                    {item.stock_qty} / {item.min_stock}
+                  </span>
+                </div>
+              ))
+          ) : (
+            <p className="text-neutral-500">Nenhum alerta.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded border p-4">
         <h2 className="text-base font-semibold mb-3">Relatório por caixa</h2>
         <div className="space-y-2 text-sm">
           {cashRegisters?.length ? (
@@ -172,6 +251,57 @@ export default async function ReportsPage() {
           ) : (
             <p className="text-neutral-500">Nenhum caixa registrado.</p>
           )}
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded border p-4">
+          <h2 className="text-base font-semibold mb-3">Movimentos de caixa</h2>
+          <div className="space-y-2 text-sm">
+            <p>
+              Reforcos: <span className="font-semibold">R$ {totalSupply.toFixed(2)}</span>
+            </p>
+            <p>
+              Sangrias:{" "}
+              <span className="font-semibold">R$ {totalWithdraw.toFixed(2)}</span>
+            </p>
+            {cashMovements?.length ? (
+              cashMovements.slice(0, 8).map((movement) => (
+                <div key={movement.id} className="flex justify-between">
+                  <span>
+                    {movement.type === "SUPPLY" ? "Reforco" : "Sangria"} ·{" "}
+                    {new Date(movement.created_at).toLocaleDateString()}
+                  </span>
+                  <span>R$ {Number(movement.amount).toFixed(2)}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-neutral-500">Nenhum movimento registrado.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded border p-4">
+          <h2 className="text-base font-semibold mb-3">Ultimos turnos</h2>
+          <div className="space-y-2 text-sm">
+            {shifts?.length ? (
+              shifts.map((shift) => (
+                <div key={shift.id} className="flex justify-between">
+                  <span>
+                    {new Date(shift.opened_at).toLocaleDateString()} ·{" "}
+                    {shift.status === "OPEN" ? "Aberto" : "Fechado"}
+                  </span>
+                  <span>
+                    {shift.closed_at
+                      ? new Date(shift.closed_at).toLocaleTimeString()
+                      : "--"}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-neutral-500">Nenhum turno registrado.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

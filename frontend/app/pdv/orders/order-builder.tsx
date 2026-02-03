@@ -15,6 +15,14 @@ type Product = {
   category_id: string | null;
 };
 
+type TableSession = {
+  id: string;
+  table_id: string;
+  opened_at: string;
+  status: "OPEN" | "CLOSED";
+  tables?: { name: string } | null;
+};
+
 type OrderItem = {
   productId: string;
   name: string;
@@ -25,11 +33,18 @@ type OrderItem = {
 type OrderBuilderProps = {
   categories: Category[];
   products: Product[];
+  tableSessions: TableSession[];
 };
 
-export default function OrderBuilder({ categories, products }: OrderBuilderProps) {
+export default function OrderBuilder({
+  categories,
+  products,
+  tableSessions,
+}: OrderBuilderProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | "ALL">("ALL");
   const [items, setItems] = useState<OrderItem[]>([]);
+  const [orderType, setOrderType] = useState<"COUNTER" | "TABLE">("COUNTER");
+  const [tableSessionId, setTableSessionId] = useState<string>("");
 
   const filteredProducts = useMemo(() => {
     if (selectedCategory === "ALL") return products;
@@ -93,8 +108,9 @@ export default function OrderBuilder({ categories, products }: OrderBuilderProps
     items: items.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
-      price: item.price,
     })),
+    orderType,
+    tableSessionId: orderType === "TABLE" ? tableSessionId : null,
   });
 
   return (
@@ -144,6 +160,56 @@ export default function OrderBuilder({ categories, products }: OrderBuilderProps
           <button className="text-sm text-red-600" onClick={() => setItems([])}>
             Cancelar
           </button>
+        </div>
+
+        <div className="space-y-2 rounded border p-3 text-sm">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`rounded px-3 py-1 ${
+                orderType === "COUNTER"
+                  ? "bg-black text-white"
+                  : "border text-neutral-700"
+              }`}
+              onClick={() => setOrderType("COUNTER")}
+            >
+              Balcao
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1 ${
+                orderType === "TABLE"
+                  ? "bg-black text-white"
+                  : "border text-neutral-700"
+              }`}
+              onClick={() => setOrderType("TABLE")}
+            >
+              Mesa
+            </button>
+          </div>
+          {orderType === "TABLE" && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Mesa ativa</label>
+              <select
+                className="w-full rounded border px-2 py-1"
+                value={tableSessionId}
+                onChange={(event) => setTableSessionId(event.target.value)}
+              >
+                <option value="">Selecione a mesa</option>
+                {tableSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.tables?.name ?? "Mesa"} ·{" "}
+                    {new Date(session.opened_at).toLocaleTimeString()}
+                  </option>
+                ))}
+              </select>
+              {tableSessions.length === 0 && (
+                <p className="text-xs text-neutral-500">
+                  Nenhuma mesa aberta. Abra em Mesas.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -197,7 +263,9 @@ export default function OrderBuilder({ categories, products }: OrderBuilderProps
           <input type="hidden" name="orderPayload" value={payload} />
           <button
             className="w-full rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-            disabled={items.length === 0}
+            disabled={
+              items.length === 0 || (orderType === "TABLE" && !tableSessionId)
+            }
           >
             Ir para Pagamento
           </button>

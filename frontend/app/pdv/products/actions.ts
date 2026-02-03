@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 
 const parseAmount = (value: FormDataEntryValue | null) => {
   if (!value) return null;
-  const normalized = String(value).replace(",", ".");
+  const normalized = String(value).trim().replace(",", ".");
   const amount = Number(normalized);
-  if (Number.isNaN(amount)) return null;
-  return amount;
+  if (!Number.isFinite(amount)) return null;
+  return Number(amount.toFixed(2));
 };
 
 export async function createCategory(formData: FormData) {
@@ -31,9 +31,18 @@ export async function saveProduct(formData: FormData) {
   const categoryId = String(formData.get("categoryId") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const price = parseAmount(formData.get("price"));
+  const trackStock = formData.get("trackStock") === "on";
+  const stockQty = Number(formData.get("stockQty") ?? 0);
+  const minStock = Number(formData.get("minStock") ?? 0);
 
-  if (!name || price === null) {
+  if (!name || price === null || price < 0) {
     throw new Error("Dados inválidos.");
+  }
+  if (!Number.isFinite(stockQty) || stockQty < 0) {
+    throw new Error("Estoque inválido.");
+  }
+  if (!Number.isFinite(minStock) || minStock < 0) {
+    throw new Error("Estoque mínimo inválido.");
   }
 
   const supabase = await createClient();
@@ -46,6 +55,9 @@ export async function saveProduct(formData: FormData) {
         price,
         category_id: categoryId || null,
         description: description || null,
+        track_stock: trackStock,
+        stock_qty: Math.floor(stockQty),
+        min_stock: Math.floor(minStock),
       })
       .eq("id", productId);
 
@@ -59,6 +71,9 @@ export async function saveProduct(formData: FormData) {
       category_id: categoryId || null,
       description: description || null,
       active: true,
+      track_stock: trackStock,
+      stock_qty: Math.floor(stockQty),
+      min_stock: Math.floor(minStock),
     });
 
     if (error) {

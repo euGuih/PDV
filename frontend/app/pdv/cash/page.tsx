@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { openCashRegister } from "./actions";
+import { createCashMovement, openCashRegister } from "./actions";
 import CloseCashForm from "./close-cash-form";
 
 export const dynamic = "force-dynamic";
@@ -51,11 +51,28 @@ export default async function CashPage() {
     .select("amount, method, orders!inner(cash_register_id)")
     .eq("orders.cash_register_id", openRegister.id);
 
+  const { data: movements } = await supabase
+    .from("cash_movements")
+    .select("id, type, amount, reason, created_at")
+    .eq("cash_register_id", openRegister.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
   const totalPayments =
     payments?.reduce((acc, item) => acc + Number(item.amount), 0) ?? 0;
   const totalCashPayments =
     payments?.reduce(
       (acc, item) => acc + (item.method === "CASH" ? Number(item.amount) : 0),
+      0
+    ) ?? 0;
+  const totalSupply =
+    movements?.reduce(
+      (acc, item) => acc + (item.type === "SUPPLY" ? Number(item.amount) : 0),
+      0
+    ) ?? 0;
+  const totalWithdraw =
+    movements?.reduce(
+      (acc, item) => acc + (item.type === "WITHDRAW" ? Number(item.amount) : 0),
       0
     ) ?? 0;
 
@@ -85,11 +102,65 @@ export default async function CashPage() {
             R$ {totalCashPayments.toFixed(2)}
           </span>
         </p>
+        <p>
+          Reforcos:{" "}
+          <span className="font-semibold">R$ {totalSupply.toFixed(2)}</span>
+        </p>
+        <p>
+          Sangrias:{" "}
+          <span className="font-semibold">R$ {totalWithdraw.toFixed(2)}</span>
+        </p>
+      </div>
+
+      <div className="rounded border p-4">
+        <h2 className="text-base font-semibold mb-3">Movimentacao de caixa</h2>
+        <form className="grid gap-3 md:grid-cols-3" action={createCashMovement}>
+          <select className="rounded border px-3 py-2" name="type" required>
+            <option value="SUPPLY">Reforco</option>
+            <option value="WITHDRAW">Sangria</option>
+          </select>
+          <input
+            className="rounded border px-3 py-2"
+            name="amount"
+            placeholder="0,00"
+            required
+          />
+          <input
+            className="rounded border px-3 py-2 md:col-span-3"
+            name="reason"
+            placeholder="Motivo"
+            required
+          />
+          <button className="rounded bg-black px-4 py-2 text-white md:col-span-3">
+            Registrar movimento
+          </button>
+        </form>
+        <div className="mt-4 space-y-2 text-sm">
+          {movements?.length ? (
+            movements.map((movement) => (
+              <div
+                key={movement.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b pb-2 last:border-b-0"
+              >
+                <div>
+                  <p>
+                    {movement.type === "SUPPLY" ? "Reforco" : "Sangria"} ·{" "}
+                    {new Date(movement.created_at).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-neutral-500">{movement.reason}</p>
+                </div>
+                <p className="font-medium">R$ {Number(movement.amount).toFixed(2)}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-neutral-500">Sem movimentos registrados.</p>
+          )}
+        </div>
       </div>
 
       <CloseCashForm
         openingAmount={Number(openRegister.opening_amount)}
-        totalCashPayments={totalCashPayments}
+        totalCashPayments={totalCashPayments + totalSupply - totalWithdraw}
       />
     </div>
   );
