@@ -17,7 +17,7 @@ export async function createCategory(formData: FormData) {
     throw new Error("Nome inválido.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("categories").insert({ name });
   if (error) {
     throw new Error("Não foi possível criar a categoria.");
@@ -36,7 +36,7 @@ export async function saveProduct(formData: FormData) {
     throw new Error("Dados inválidos.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   if (productId) {
     const { error } = await supabase
@@ -77,7 +77,7 @@ export async function toggleProductStatus(formData: FormData) {
     throw new Error("Produto inválido.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("products")
     .update({ active })

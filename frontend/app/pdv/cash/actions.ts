@@ -18,7 +18,7 @@ export async function openCashRegister(formData: FormData) {
     throw new Error("Valor inicial inválido.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("cash_registers").insert({
     opening_amount: openingAmount,
     status: "OPEN",
@@ -39,7 +39,7 @@ export async function closeCashRegister(formData: FormData) {
     throw new Error("Valor contado inválido.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id")

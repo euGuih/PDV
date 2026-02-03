@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PaymentForm from "./payment-form";
 
+export const dynamic = "force-dynamic";
+
 type PaymentPageProps = {
   searchParams: { orderId?: string };
 };
@@ -12,7 +14,7 @@ export default async function PaymentPage({ searchParams }: PaymentPageProps) {
     redirect("/pdv/orders");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: order } = await supabase
     .from("orders")
     .select("id, total, status")

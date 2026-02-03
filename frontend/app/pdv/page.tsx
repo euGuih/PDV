@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function PdvPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id, opened_at")

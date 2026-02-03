@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import OrderBuilder from "./order-builder";
 
+export const dynamic = "force-dynamic";
+
 export default async function OrdersPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id")

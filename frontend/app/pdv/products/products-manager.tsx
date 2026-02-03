@@ -15,7 +15,7 @@ type Product = {
   active: boolean;
   description: string | null;
   category_id: string | null;
-  categories?: { name: string } | null;
+  categories?: { name: string }[] | null;
 };
 
 type ProductsManagerProps = {
@@ -45,7 +45,7 @@ export default function ProductsManager({
               <div>
                 <p className="font-medium">{product.name}</p>
                 <p className="text-xs text-neutral-500">
-                  {product.categories?.name ?? "Sem categoria"} · R${" "}
+                  {product.categories?.[0]?.name ?? "Sem categoria"} · R${" "}
                   {Number(product.price).toFixed(2)}
                 </p>
                 <p className="text-xs text-neutral-500">

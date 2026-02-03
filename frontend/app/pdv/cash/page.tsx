@@ -2,8 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { openCashRegister } from "./actions";
 import CloseCashForm from "./close-cash-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function CashPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id, opening_amount, opened_at")

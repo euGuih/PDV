@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 type PaymentRow = {
   amount: number;
   method: "CASH" | "PIX" | "CARD";
@@ -14,7 +16,7 @@ type OrderItemRow = {
 };
 
 export default async function ReportsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: payments } = await supabase
     .from("payments")

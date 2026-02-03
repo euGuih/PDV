@@ -22,7 +22,7 @@ export async function finalizePayment(formData: FormData) {
     throw new Error("Nenhum pagamento informado.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: order } = await supabase
     .from("orders")
