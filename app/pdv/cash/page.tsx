@@ -3,7 +3,7 @@ import { openCashRegister } from "./actions";
 import CloseCashForm from "./close-cash-form";
 
 export default async function CashPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id, opening_amount, opened_at")
