@@ -8,7 +8,7 @@ type OrderRow = {
   status: "OPEN" | "PAID" | "CANCELED";
   total: number;
   order_type: "COUNTER" | "TABLE";
-  tables?: { name: string } | null;
+  tables?: { name: string }[] | null;
 };
 
 type PaymentRow = {
@@ -25,7 +25,8 @@ export default async function OrdersHistoryPage() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  const orderIds = (orders as OrderRow[] | null)?.map((order) => order.id) ?? [];
+  const ordersList = (orders ?? []) as OrderRow[];
+  const orderIds = ordersList.map((order) => order.id);
 
   const { data: payments } = await supabase
     .from("payments")
@@ -52,8 +53,8 @@ export default async function OrdersHistoryPage() {
 
       <div className="rounded border p-4">
         <div className="space-y-3 text-sm">
-          {(orders as OrderRow[] | null)?.length ? (
-            (orders as OrderRow[]).map((order) => (
+          {ordersList.length ? (
+            ordersList.map((order) => (
               <div
                 key={order.id}
                 className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-b-0"
@@ -65,7 +66,7 @@ export default async function OrdersHistoryPage() {
                   </p>
                   <p className="text-xs text-neutral-500">
                     Status: {order.status}
-                    {order.tables?.name ? ` · ${order.tables.name}` : ""}
+                    {order.tables?.[0]?.name ? ` · ${order.tables[0].name}` : ""}
                   </p>
                 </div>
                 <div className="text-right">
