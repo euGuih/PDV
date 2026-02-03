@@ -22,7 +22,7 @@ export async function createOrder(formData: FormData) {
     throw new Error("Pedido vazio.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id")
