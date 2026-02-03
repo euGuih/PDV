@@ -25,3 +25,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 As migrações estão em `backend/supabase/migrations`.
 Execute-as no projeto Supabase.
 
+
