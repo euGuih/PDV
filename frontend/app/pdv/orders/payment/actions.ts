@@ -6,14 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 type PaymentPayload = {
   orderId: string;
   payments: Array<{
-    method: "CASH" | "PIX" | "CARD";
+    method: string;
     amount: number;
+    received?: number | null;
+    change?: number | null;
   }>;
 };
-
-type PaymentMethod = PaymentPayload["payments"][number]["method"];
-
-const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "PIX", "CARD"];
 
 const toCents = (value: number) => Math.round(value * 100);
 
@@ -59,28 +57,22 @@ export async function finalizePayment(formData: FormData) {
 
   const { data: orderItems } = await supabase
     .from("order_items")
-    .select("product_id, quantity, price, products(name, track_stock, stock_qty)")
+    .select(
+      "product_id, combo_id, item_type, quantity, price, products(name, track_stock, stock_qty)"
+    )
     .eq("order_id", payload.orderId);
 
   const itemsToCheck =
     (orderItems as
       | Array<{
-          product_id: string;
+          product_id: string | null;
+          combo_id: string | null;
+          item_type: "PRODUCT" | "COMBO";
           quantity: number;
           price: number;
           products?: { name: string; track_stock: boolean; stock_qty: number } | null;
         }>
       | null) ?? [];
-
-  for (const item of itemsToCheck) {
-    if (!item.products?.track_stock) continue;
-    const available = Number(item.products.stock_qty ?? 0);
-    if (available < Number(item.quantity)) {
-      throw new Error(
-        `Estoque insuficiente para ${item.products?.name ?? "produto"}.`
-      );
-    }
-  }
 
   const { count: existingPaymentsCount, error: existingPaymentsError } =
     await supabase
@@ -96,9 +88,22 @@ export async function finalizePayment(formData: FormData) {
     throw new Error("Pedido já possui pagamentos.");
   }
 
+  const { data: paymentMethods, error: paymentMethodsError } = await supabase
+    .from("payment_methods")
+    .select("id, code, fee_percent, fee_fixed")
+    .eq("active", true);
+
+  if (paymentMethodsError) {
+    throw new Error("Não foi possível validar métodos de pagamento.");
+  }
+
+  const allowedMethods = new Map(
+    paymentMethods?.map((row) => [row.code, row]) ?? []
+  );
+
   const normalizedPayments = payload.payments.map((payment) => {
-    const method = String(payment.method).toUpperCase() as PaymentMethod;
-    if (!PAYMENT_METHODS.includes(method)) {
+    const method = String(payment.method).toUpperCase();
+    if (!allowedMethods.has(method)) {
       throw new Error("Método de pagamento inválido.");
     }
     const amount = Number(payment.amount);
@@ -109,17 +114,25 @@ export async function finalizePayment(formData: FormData) {
     if (amountCents <= 0) {
       throw new Error("Valor de pagamento inválido.");
     }
-    return { method, amount: fromCents(amountCents), amountCents };
+    const received = payment.received ? Number(payment.received) : null;
+    const change = payment.change ? Number(payment.change) : 0;
+    if (received !== null && Number.isNaN(received)) {
+      throw new Error("Valor recebido inválido.");
+    }
+    if (change && Number.isNaN(change)) {
+      throw new Error("Troco inválido.");
+    }
+    if (received !== null && received < amount) {
+      throw new Error("Valor recebido menor que o pagamento.");
+    }
+    return {
+      method,
+      amount: fromCents(amountCents),
+      amountCents,
+      received,
+      change,
+    };
   });
-
-  const { data: paymentMethods } = await supabase
-    .from("payment_methods")
-    .select("id, code")
-    .in(
-      "code",
-      Array.from(new Set(normalizedPayments.map((payment) => payment.method)))
-    )
-    .eq("active", true);
 
   const methodIdByCode = new Map(
     paymentMethods?.map((row) => [row.code, row.id]) ?? []
@@ -136,13 +149,21 @@ export async function finalizePayment(formData: FormData) {
   }
 
   const { error: paymentsError } = await supabase.from("payments").insert(
-    normalizedPayments.map((payment) => ({
-      order_id: payload.orderId,
-      method: payment.method,
-      payment_method_id: methodIdByCode.get(payment.method) ?? null,
-      amount: payment.amount,
-      fee_amount: 0,
-    }))
+    normalizedPayments.map((payment) => {
+      const methodConfig = allowedMethods.get(payment.method);
+      const feePercent = Number(methodConfig?.fee_percent ?? 0);
+      const feeFixed = Number(methodConfig?.fee_fixed ?? 0);
+      const feeAmount = payment.amount * (feePercent / 100) + feeFixed;
+      return {
+        order_id: payload.orderId,
+        method: payment.method,
+        payment_method_id: methodIdByCode.get(payment.method) ?? null,
+        amount: payment.amount,
+        received_amount: payment.received ?? null,
+        change_amount: payment.change ?? 0,
+        fee_amount: Number(feeAmount.toFixed(2)),
+      };
+    })
   );
 
   if (paymentsError) {
@@ -161,7 +182,43 @@ export async function finalizePayment(formData: FormData) {
     throw new Error("Não foi possível finalizar o pedido.");
   }
 
+  const comboIds = itemsToCheck
+    .filter((item) => item.item_type === "COMBO" && item.combo_id)
+    .map((item) => item.combo_id as string);
+
+  const { data: comboItems } =
+    comboIds.length > 0
+      ? await supabase
+          .from("combo_items")
+          .select("combo_id, product_id, quantity")
+          .in("combo_id", comboIds)
+      : {
+          data: [] as Array<{
+            combo_id: string;
+            product_id: string;
+            quantity: number;
+          }>,
+        };
+
+  const comboProductsCount = new Map<string, number>();
   for (const item of itemsToCheck) {
+    if (item.item_type !== "COMBO" || !item.combo_id) continue;
+    const components =
+      (comboItems as
+        | Array<{ combo_id: string; product_id: string; quantity: number }>
+        | null)?.filter((comboItem) => comboItem.combo_id === item.combo_id) ?? [];
+    for (const component of components) {
+      const current = comboProductsCount.get(component.product_id) ?? 0;
+      comboProductsCount.set(
+        component.product_id,
+        current + Number(component.quantity) * Number(item.quantity)
+      );
+    }
+  }
+
+  for (const item of itemsToCheck) {
+    if (item.item_type !== "PRODUCT") continue;
+    if (!item.product_id) continue;
     if (!item.products?.track_stock) continue;
     const quantity = Number(item.quantity);
     const { data: updatedProduct } = await supabase
@@ -191,6 +248,41 @@ export async function finalizePayment(formData: FormData) {
     });
   }
 
+  for (const [productId, quantity] of comboProductsCount.entries()) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id, track_stock, stock_qty")
+      .eq("id", productId)
+      .single();
+
+    if (!product?.track_stock) continue;
+    const { data: updatedProduct } = await supabase
+      .from("products")
+      .update({ stock_qty: Number(product.stock_qty) - Number(quantity) })
+      .eq("id", productId)
+      .eq("track_stock", true)
+      .gte("stock_qty", Number(quantity))
+      .select("id");
+
+    if (!updatedProduct || updatedProduct.length === 0) {
+      await supabase.from("payments").delete().eq("order_id", payload.orderId);
+      await supabase
+        .from("orders")
+        .update({ status: "OPEN" })
+        .eq("id", payload.orderId);
+      throw new Error("Não foi possível atualizar o estoque.");
+    }
+
+    await supabase.from("stock_movements").insert({
+      product_id: productId,
+      order_id: payload.orderId,
+      type: "OUT",
+      quantity,
+      reason: "Venda combo",
+      created_by: userData.user.id,
+    });
+  }
+
   await supabase.from("order_events").insert({
     order_id: payload.orderId,
     event_type: "PAID",
@@ -198,6 +290,8 @@ export async function finalizePayment(formData: FormData) {
       payments: normalizedPayments.map((payment) => ({
         method: payment.method,
         amount: payment.amount,
+        received: payment.received ?? null,
+        change: payment.change ?? 0,
       })),
     },
     created_by: userData.user.id,

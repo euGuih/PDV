@@ -69,8 +69,15 @@ export default async function OrdersPage() {
     redirect("/pdv");
   }
 
-  const [categoriesResult, productsResult, tableSessionsResult] =
-    await Promise.all([
+  const [
+    categoriesResult,
+    productsResult,
+    combosResult,
+    tableSessionsResult,
+    modifierGroupsResult,
+    modifiersResult,
+    productModifierGroupsResult,
+  ] = await Promise.all([
       supabase
         .from("categories")
         .select("id, name")
@@ -78,7 +85,12 @@ export default async function OrdersPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, price, category_id")
+        .select("id, name, price, category_id, active")
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("combos")
+        .select("id, name, price, category_id, active")
         .eq("active", true)
         .order("name"),
       supabase
@@ -86,12 +98,30 @@ export default async function OrdersPage() {
         .select("id, table_id, opened_at, status, tables(name)")
         .eq("status", "OPEN")
         .order("opened_at"),
+      supabase
+        .from("modifier_groups")
+        .select("id, name, min_select, max_select, required, active")
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("modifiers")
+        .select("id, group_id, name, price, active")
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("product_modifier_groups")
+        .select("product_id, modifier_group_id, sort_order")
+        .order("sort_order"),
     ]);
 
   const errors = [
     categoriesResult.error,
     productsResult.error,
+    combosResult.error,
     tableSessionsResult.error,
+    modifierGroupsResult.error,
+    modifiersResult.error,
+    productModifierGroupsResult.error,
   ].filter(Boolean);
 
   if (errors.length > 0) {
@@ -110,7 +140,11 @@ export default async function OrdersPage() {
     <OrdersClient
       categories={categoriesResult.data ?? []}
       products={productsResult.data ?? []}
+      combos={combosResult.data ?? []}
       tableSessions={tableSessionsResult.data ?? []}
+      modifierGroups={modifierGroupsResult.data ?? []}
+      modifiers={modifiersResult.data ?? []}
+      productModifierGroups={productModifierGroupsResult.data ?? []}
     />
   );
 }

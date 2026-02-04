@@ -25,6 +25,12 @@ export async function openCashRegister(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData?.user) {
+    throw new Error("Usuário não autenticado.");
+  }
+
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id")
@@ -35,13 +41,33 @@ export async function openCashRegister(formData: FormData) {
     throw new Error("Já existe um caixa aberto.");
   }
 
-  const { error } = await supabase.from("cash_registers").insert({
+  const { data: register, error } = await supabase
+    .from("cash_registers")
+    .insert({
     opening_amount: openingAmount,
     status: "OPEN",
-  });
+      opened_by: userData.user.id,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !register) {
     throw new Error("Não foi possível abrir o caixa.");
+  }
+
+  const { data: openShift } = await supabase
+    .from("shifts")
+    .select("id")
+    .eq("status", "OPEN")
+    .eq("opened_by", userData.user.id)
+    .maybeSingle();
+
+  if (!openShift) {
+    await supabase.from("shifts").insert({
+      opened_by: userData.user.id,
+      cash_register_id: register.id,
+      note_open: "Abertura automática do caixa.",
+    });
   }
 
   revalidatePath("/pdv");
@@ -56,6 +82,12 @@ export async function closeCashRegister(formData: FormData) {
   }
 
   const supabase = await createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !userData?.user) {
+    throw new Error("Usuário não autenticado.");
+  }
+
   const { data: openRegister } = await supabase
     .from("cash_registers")
     .select("id")
@@ -66,18 +98,40 @@ export async function closeCashRegister(formData: FormData) {
     throw new Error("Nenhum caixa aberto.");
   }
 
+  const { count: openOrdersCount } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("cash_register_id", openRegister.id)
+    .eq("status", "OPEN");
+
+  if (openOrdersCount && openOrdersCount > 0) {
+    throw new Error("Existem pedidos abertos no caixa.");
+  }
+
   const { error } = await supabase
     .from("cash_registers")
     .update({
       closing_amount: countedAmount,
       closed_at: new Date().toISOString(),
       status: "CLOSED",
+      closed_by: userData.user.id,
     })
     .eq("id", openRegister.id);
 
   if (error) {
     throw new Error("Não foi possível fechar o caixa.");
   }
+
+  await supabase
+    .from("shifts")
+    .update({
+      status: "CLOSED",
+      closed_at: new Date().toISOString(),
+      closed_by: userData.user.id,
+      note_close: "Fechamento automático do caixa.",
+    })
+    .eq("status", "OPEN")
+    .eq("opened_by", userData.user.id);
 
   revalidatePath("/pdv");
   revalidatePath("/pdv/cash");

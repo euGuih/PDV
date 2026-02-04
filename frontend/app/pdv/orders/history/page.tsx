@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { cancelOrder } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,13 +70,29 @@ export default async function OrdersHistoryPage() {
                     {order.tables?.[0]?.name ? ` · ${order.tables[0].name}` : ""}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">
-                    R$ {Number(order.total).toFixed(2)}
-                  </p>
-                  <p className="text-xs text-neutral-500">
-                    Pago: R$ {(paidByOrder?.[order.id] ?? 0).toFixed(2)}
-                  </p>
+                <div className="text-right space-y-2">
+                  <div>
+                    <p className="font-medium">
+                      R$ {Number(order.total).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      Pago: R$ {(paidByOrder?.[order.id] ?? 0).toFixed(2)}
+                    </p>
+                  </div>
+                  {order.status === "OPEN" && (
+                    <form className="flex flex-col gap-2" action={cancelOrder}>
+                      <input type="hidden" name="orderId" value={order.id} />
+                      <input
+                        className="rounded border px-2 py-1 text-xs"
+                        name="reason"
+                        placeholder="Motivo do cancelamento"
+                        required
+                      />
+                      <button className="rounded border px-2 py-1 text-xs text-red-600">
+                        Cancelar pedido
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
             ))

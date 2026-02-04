@@ -51,6 +51,12 @@ export default async function CashPage() {
     .select("amount, method, orders!inner(cash_register_id)")
     .eq("orders.cash_register_id", openRegister.id);
 
+  const paymentsByMethod =
+    payments?.reduce<Record<string, number>>((acc, item) => {
+      acc[item.method] = (acc[item.method] ?? 0) + Number(item.amount);
+      return acc;
+    }, {}) ?? {};
+
   const { data: movements } = await supabase
     .from("cash_movements")
     .select("id, type, amount, reason, created_at")
@@ -85,7 +91,7 @@ export default async function CashPage() {
         </p>
       </div>
 
-      <div className="rounded border bg-neutral-50 p-4 text-sm">
+      <div className="rounded border bg-neutral-50 p-4 text-sm space-y-1">
         <p>
           Valor de abertura:{" "}
           <span className="font-semibold">
@@ -102,6 +108,14 @@ export default async function CashPage() {
             R$ {totalCashPayments.toFixed(2)}
           </span>
         </p>
+        <div className="pt-2 text-xs text-neutral-500">
+          <p className="font-medium text-neutral-600">Resumo por metodo</p>
+          {Object.entries(paymentsByMethod).map(([method, amount]) => (
+            <p key={method}>
+              {method}: R$ {Number(amount).toFixed(2)}
+            </p>
+          ))}
+        </div>
         <p>
           Reforcos:{" "}
           <span className="font-semibold">R$ {totalSupply.toFixed(2)}</span>

@@ -4,15 +4,16 @@ export const dynamic = "force-dynamic";
 
 type PaymentRow = {
   amount: number;
-  method: "CASH" | "PIX" | "CARD";
+  method: string;
   orders?: { cash_register_id: string };
 };
 
 type OrderItemRow = {
-  product_id: string;
+  id: string;
+  item_name: string | null;
+  item_type: "PRODUCT" | "COMBO";
   quantity: number;
   price: number;
-  products?: { name: string } | null;
 };
 
 type StockRow = {
@@ -36,12 +37,29 @@ type ShiftRow = {
   status: "OPEN" | "CLOSED";
 };
 
-export default async function ReportsPage() {
-  const supabase = await createClient();
+type ReportsPageProps = {
+  searchParams: { from?: string; to?: string };
+};
 
-  const { data: payments } = await supabase
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
+  const supabase = await createClient();
+  const fromDate = searchParams.from ? new Date(searchParams.from) : null;
+  const toDate = searchParams.to ? new Date(searchParams.to) : null;
+  const fromIso = fromDate ? fromDate.toISOString() : null;
+  const toIso = toDate ? new Date(toDate.setHours(23, 59, 59, 999)).toISOString() : null;
+
+  let paymentsQuery = supabase
     .from("payments")
-    .select("amount, method, orders!inner(cash_register_id)");
+    .select("amount, method, orders!inner(cash_register_id), created_at");
+  if (fromIso) paymentsQuery = paymentsQuery.gte("created_at", fromIso);
+  if (toIso) paymentsQuery = paymentsQuery.lte("created_at", toIso);
+  const { data: payments } = await paymentsQuery;
+
+  const { data: paymentMethods } = await supabase
+    .from("payment_methods")
+    .select("code, name")
+    .eq("active", true)
+    .order("name");
 
   const totalSold =
     payments?.reduce((acc, item) => acc + Number(item.amount), 0) ?? 0;
@@ -52,41 +70,54 @@ export default async function ReportsPage() {
       return acc;
     }, {}) ?? {};
 
-  const { count: paidOrdersCount } = await supabase
+  let paidOrdersQuery = supabase
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("status", "PAID");
+  if (fromIso) paidOrdersQuery = paidOrdersQuery.gte("created_at", fromIso);
+  if (toIso) paidOrdersQuery = paidOrdersQuery.lte("created_at", toIso);
+  const { count: paidOrdersCount } = await paidOrdersQuery;
 
-  const { data: orderItems } = await supabase
+  let orderItemsQuery = supabase
     .from("order_items")
-    .select("product_id, quantity, price, products(name)");
+    .select("id, item_name, item_type, quantity, price, created_at");
+  if (fromIso) orderItemsQuery = orderItemsQuery.gte("created_at", fromIso);
+  if (toIso) orderItemsQuery = orderItemsQuery.lte("created_at", toIso);
+  const { data: orderItems } = await orderItemsQuery;
 
   const productsReport = (orderItems as OrderItemRow[] | null)?.reduce(
     (acc, item) => {
-      const entry = acc[item.product_id] ?? {
-        name: item.products?.name ?? "Produto",
+      const key = `${item.item_type}-${item.item_name ?? "Item"}`;
+      const entry = acc[key] ?? {
+        name: item.item_name ?? "Item",
         quantity: 0,
         revenue: 0,
       };
       entry.quantity += Number(item.quantity);
       entry.revenue += Number(item.quantity) * Number(item.price);
-      acc[item.product_id] = entry;
+      acc[key] = entry;
       return acc;
     },
     {} as Record<string, { name: string; quantity: number; revenue: number }>
   );
 
-  const { data: cashRegisters } = await supabase
+  let cashRegistersQuery = supabase
     .from("cash_registers")
     .select("id, opened_at, closed_at, opening_amount, closing_amount, status")
     .order("opened_at", { ascending: false })
     .limit(10);
+  if (fromIso) cashRegistersQuery = cashRegistersQuery.gte("opened_at", fromIso);
+  if (toIso) cashRegistersQuery = cashRegistersQuery.lte("opened_at", toIso);
+  const { data: cashRegisters } = await cashRegistersQuery;
 
-  const { data: cashMovements } = await supabase
+  let cashMovementsQuery = supabase
     .from("cash_movements")
     .select("id, amount, type, created_at")
     .order("created_at", { ascending: false })
     .limit(50);
+  if (fromIso) cashMovementsQuery = cashMovementsQuery.gte("created_at", fromIso);
+  if (toIso) cashMovementsQuery = cashMovementsQuery.lte("created_at", toIso);
+  const { data: cashMovements } = await cashMovementsQuery;
 
   const totalSupply =
     (cashMovements as CashMovementRow[] | null)?.reduce(
@@ -99,11 +130,14 @@ export default async function ReportsPage() {
       0
     ) ?? 0;
 
-  const { data: shifts } = await supabase
+  let shiftsQuery = supabase
     .from("shifts")
     .select("id, opened_at, closed_at, status")
     .order("opened_at", { ascending: false })
     .limit(10);
+  if (fromIso) shiftsQuery = shiftsQuery.gte("opened_at", fromIso);
+  if (toIso) shiftsQuery = shiftsQuery.lte("opened_at", toIso);
+  const { data: shifts } = await shiftsQuery;
 
   const openShiftsCount =
     (shifts as ShiftRow[] | null)?.filter((shift) => shift.status === "OPEN")
@@ -134,6 +168,22 @@ export default async function ReportsPage() {
         </p>
       </div>
 
+      <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" method="get">
+        <input
+          className="rounded border px-3 py-2"
+          type="date"
+          name="from"
+          defaultValue={searchParams.from ?? ""}
+        />
+        <input
+          className="rounded border px-3 py-2"
+          type="date"
+          name="to"
+          defaultValue={searchParams.to ?? ""}
+        />
+        <button className="rounded border px-4 py-2">Aplicar filtro</button>
+      </form>
+
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded border p-4">
           <p className="text-sm text-neutral-500">Total vendido</p>
@@ -155,16 +205,12 @@ export default async function ReportsPage() {
             Total por método de pagamento
           </h2>
           <div className="space-y-2 text-sm">
-            {(["CASH", "PIX", "CARD"] as const).map((method) => (
-              <div key={method} className="flex justify-between">
+            {(paymentMethods ?? []).map((method) => (
+              <div key={method.code} className="flex justify-between">
+                <span>{method.name}</span>
                 <span>
-                  {method === "CASH"
-                    ? "Dinheiro"
-                    : method === "PIX"
-                    ? "PIX"
-                    : "Cartão"}
+                  R$ {(totalsByMethod[method.code] ?? 0).toFixed(2)}
                 </span>
-                <span>R$ {(totalsByMethod[method] ?? 0).toFixed(2)}</span>
               </div>
             ))}
           </div>
