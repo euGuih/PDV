@@ -32,7 +32,7 @@ type PaymentFormProps = {
     order_item_modifiers?: Array<{
       quantity: number;
       price: number;
-      modifiers?: { name: string } | null;
+      modifiers?: { name: string } | { name: string }[] | null;
     }> | null;
   }>;
   paymentMethods: PaymentMethod[];
@@ -155,8 +155,16 @@ export default function PaymentForm({
                 <p className="text-xs text-neutral-500">
                   {item.order_item_modifiers
                     .map(
-                      (modifier) =>
-                        `${modifier.modifiers?.name ?? "Adicional"}`
+                      (modifier) => {
+                        if (!modifier.modifiers) return "Adicional";
+                        if (Array.isArray(modifier.modifiers)) {
+                          return modifier.modifiers
+                            .map((entry) => entry.name)
+                            .filter(Boolean)
+                            .join(", ");
+                        }
+                        return modifier.modifiers.name ?? "Adicional";
+                      }
                     )
                     .join(", ")}
                 </p>
